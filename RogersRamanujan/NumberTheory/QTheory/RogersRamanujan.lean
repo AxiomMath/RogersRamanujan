@@ -9,11 +9,13 @@ public import RogersRamanujan.NumberTheory.QTheory.Bailey
 import RogersRamanujan.NumberTheory.QTheory.Basic
 import RogersRamanujan.NumberTheory.QTheory.JacobiTripleProduct.Basic
 import RogersRamanujan.NumberTheory.QTheory.Nonarchimedean
+import RogersRamanujan.NumberTheory.QTheory.NormedRing
 import RogersRamanujan.NumberTheory.QTheory.StrongNonarchimedean
 import RogersRamanujan.RingTheory.PowerSeries.Evaluation
 import RogersRamanujan.Topology.Algebra.InfiniteSum.NatInt
 import RogersRamanujan.Topology.Algebra.TopologicallyNilpotent
 import Mathlib.Algebra.Polynomial.Laurent
+public import Mathlib.Analysis.Normed.Field.Basic
 public import Mathlib.Data.Matrix.Mul -- shake: keep
 import Mathlib.Order.Filter.AtTopBot.Ring
 import Mathlib.RingTheory.MvPowerSeries.LinearTopology
@@ -28,6 +30,11 @@ public import Mathlib.Topology.Algebra.InfiniteSum.NatInt -- shake: keep
   `∑' j, q ^ (j*(j+1)) / (q; q)_j = 1 / [(q^2; q^5)_∞ * (q^3; q^5)_∞]`
 * Their `HasSum` versions are also provided via `first_rogers_ramanujan_hasSum` and
   `second_rogers_ramanujan_hasSum`.
+* `first_rogers_ramanujan_of_norm_lt_one`, `second_rogers_ramanujan_of_norm_lt_one`: the same
+  identities for `‖q‖ < 1` in a complete normed commutative ring with `‖1‖ = 1`, obtained by
+  evaluating the formal identities in `ℤ⟦X⟧` at `X ↦ q`; in a complete normed field such as `ℂ`,
+  `first_rogers_ramanujan_div_of_norm_lt_one` and `second_rogers_ramanujan_div_of_norm_lt_one`
+  state them with division.
 
 ## References
 
@@ -360,3 +367,121 @@ theorem second_rogers_ramanujan
   (second_rogers_ramanujan_hasSum hq).tsum_eq
 
 end just_nonarchimedean
+
+/-! # The Rogers-Ramanujan identities in complete normed rings -/
+
+section normedRing
+
+open PowerSeries hiding X
+open PowerSeries.DiscreteTopology
+
+variable {𝕜 : Type*} [NormedCommRing 𝕜] [NormOneClass 𝕜]
+
+private theorem tsum_enormAt_X_pow_mul_bInv_qPochhammer_ne_top {e : ℕ → ℕ} (he : ∀ j, j ≤ e j)
+    {q : 𝕜} (hq : ‖q‖ₑ < 1) :
+    ∑' j, enormAt (Int.castRingHom 𝕜) q
+      (PowerSeries.X ^ e j * bInv (PowerSeries.X; PowerSeries.X)_j) ≠ ⊤ :=
+  have hX1 : enormAt (Int.castRingHom 𝕜) q PowerSeries.X < 1 := enormAt_X.trans_lt hq
+  ne_top_of_le_ne_top (ENNReal.tsum_mul_right.trans_ne <|
+      ENNReal.mul_ne_top (tsum_geometric_lt_top.2 hq).ne ENNReal.ofReal_ne_top) <|
+    ENNReal.tsum_le_tsum fun j ↦ (enormAt_mul_le _ _).trans <| mul_le_mul'
+      ((enormAt_X_pow_le _).trans (pow_le_pow_right_of_le_one' hq.le (he j)))
+      (enormAt_bInv_qPochhammer_le isTopologicallyNilpotent_X hX1 hX1 j)
+
+variable [CompleteSpace 𝕜]
+
+private theorem hasSum_of_norm_lt_one_of_powerSeries {e : ℕ → ℕ} (he : ∀ j, j ≤ e j) {k l : ℕ}
+    (hk : k ≠ 0) (hl : l ≠ 0) {q : 𝕜} (hq : ‖q‖ < 1)
+    (h : HasSum (fun j ↦ (PowerSeries.X : ℤ⟦X⟧) ^ e j * bInv (PowerSeries.X; PowerSeries.X)_j)
+      (bInv (PowerSeries.X ^ k; PowerSeries.X ^ 5)_∞ *
+        bInv (PowerSeries.X ^ l; PowerSeries.X ^ 5)_∞)) :
+    HasSum (fun j ↦ q ^ e j * bInv (q; q)_j) (bInv (q ^ k; q ^ 5)_∞ * bInv (q ^ l; q ^ 5)_∞) := by
+  have hq' : ‖q‖ₑ < 1 := ofReal_norm q ▸ ENNReal.ofReal_lt_one.2 hq
+  have hX (m : ℕ) (hm : m ≠ 0) := (isTopologicallyNilpotent_X_pow (R := ℤ) m).2 hm
+  have hX1 (m : ℕ) (hm : m ≠ 0) : enormAt (Int.castRingHom 𝕜) q (PowerSeries.X ^ m) < 1 :=
+    (enormAt_X_pow_le m).trans_lt (pow_lt_one' hq' hm)
+  have h' := hasSum_evalAt h (tsum_enormAt_X_pow_mul_bInv_qPochhammer_ne_top he hq')
+  have h5 := hX 5 (by norm_num)
+  have h51 := hX1 5 (by norm_num)
+  rw [evalAt_mul (enormAt_bInv_qPochhammerInf_ne_top (hX k hk) (hX1 k hk) h51 h5)
+      (enormAt_bInv_qPochhammerInf_ne_top (hX l hl) (hX1 l hl) h51 h5),
+    evalAt_bInv_qPochhammerInf (hX k hk) (hX1 k hk) h51 h5,
+    evalAt_bInv_qPochhammerInf (hX l hl) (hX1 l hl) h51 h5] at h'
+  simpa [evalAt_mul, evalAt_bInv_qPochhammer, enormAt_bInv_qPochhammer_ne_top, hq'] using h'
+
+/-- **First Rogers-Ramanujan identity in a complete normed ring**, `HasSum` version: for
+`‖q‖ < 1`, `∑ q ^ (j ^ 2) / (q; q)_j = 1 / ((q; q ^ 5)_∞ (q ^ 4; q ^ 5)_∞)`, where the series and
+the infinite products converge, and all the inverted `q`-Pochhammer symbols are units
+(`isUnit_qPochhammer_of_norm_lt_one`, `isUnit_qPochhammerInf_of_norm_lt_one`). -/
+theorem first_rogers_ramanujan_hasSum_of_norm_lt_one {q : 𝕜} (hq : ‖q‖ < 1) :
+    HasSum (fun j ↦ q ^ j ^ 2 * bInv (q; q)_j) (bInv (q; q ^ 5)_∞ * bInv (q ^ 4; q ^ 5)_∞) := by
+  simpa using hasSum_of_norm_lt_one_of_powerSeries (Nat.le_self_pow two_ne_zero) one_ne_zero
+    four_ne_zero hq <| by
+      simpa using first_rogers_ramanujan_hasSum_strong (isTopologicallyNilpotent_X (R := ℤ))
+
+/-- **Second Rogers-Ramanujan identity in a complete normed ring**, `HasSum` version: for
+`‖q‖ < 1`, `∑ q ^ (j (j + 1)) / (q; q)_j = 1 / ((q ^ 2; q ^ 5)_∞ (q ^ 3; q ^ 5)_∞)`, where the
+series and the infinite products converge, and all the inverted `q`-Pochhammer symbols are units
+(`isUnit_qPochhammer_of_norm_lt_one`, `isUnit_qPochhammerInf_of_norm_lt_one`). -/
+theorem second_rogers_ramanujan_hasSum_of_norm_lt_one {q : 𝕜} (hq : ‖q‖ < 1) :
+    HasSum (fun j ↦ q ^ (j * (j + 1)) * bInv (q; q)_j)
+      (bInv (q ^ 2; q ^ 5)_∞ * bInv (q ^ 3; q ^ 5)_∞) :=
+  hasSum_of_norm_lt_one_of_powerSeries (fun j ↦ Nat.le_mul_of_pos_right j j.succ_pos) two_ne_zero
+    three_ne_zero hq (second_rogers_ramanujan_hasSum_strong isTopologicallyNilpotent_X)
+
+/-- **First Rogers-Ramanujan identity in a complete normed ring**: for `‖q‖ < 1`,
+`∑' j, q ^ (j ^ 2) / (q; q)_j = 1 / ((q; q ^ 5)_∞ (q ^ 4; q ^ 5)_∞)`. -/
+theorem first_rogers_ramanujan_of_norm_lt_one {q : 𝕜} (hq : ‖q‖ < 1) :
+    ∑' j, q ^ j ^ 2 * bInv (q; q)_j = bInv (q; q ^ 5)_∞ * bInv (q ^ 4; q ^ 5)_∞ :=
+  (first_rogers_ramanujan_hasSum_of_norm_lt_one hq).tsum_eq
+
+/-- **Second Rogers-Ramanujan identity in a complete normed ring**: for `‖q‖ < 1`,
+`∑' j, q ^ (j (j + 1)) / (q; q)_j = 1 / ((q ^ 2; q ^ 5)_∞ (q ^ 3; q ^ 5)_∞)`. -/
+theorem second_rogers_ramanujan_of_norm_lt_one {q : 𝕜} (hq : ‖q‖ < 1) :
+    ∑' j, q ^ (j * (j + 1)) * bInv (q; q)_j = bInv (q ^ 2; q ^ 5)_∞ * bInv (q ^ 3; q ^ 5)_∞ :=
+  (second_rogers_ramanujan_hasSum_of_norm_lt_one hq).tsum_eq
+
+end normedRing
+
+private theorem bInv_eq_inv_of_isUnit {K : Type*} [Field K] {x : K} (hx : IsUnit x) :
+    bInv x = x⁻¹ :=
+  bInv_eq_of_mul_eq_one (mul_inv_cancel₀ hx.ne_zero)
+
+section normedField
+
+variable {𝕜 : Type*} [NormedField 𝕜] [CompleteSpace 𝕜] {q : 𝕜}
+
+/-- **First Rogers-Ramanujan identity in a complete normed field**, `HasSum` version: for
+`‖q‖ < 1`, `∑ q ^ (j ^ 2) / (q; q)_j = 1 / ((q; q ^ 5)_∞ (q ^ 4; q ^ 5)_∞)`. -/
+theorem first_rogers_ramanujan_hasSum_div_of_norm_lt_one (hq : ‖q‖ < 1) :
+    HasSum (fun j ↦ q ^ j ^ 2 / (q; q)_j) ((q; q ^ 5)_∞⁻¹ * (q ^ 4; q ^ 5)_∞⁻¹) := by
+  have h (k : ℕ) (hk : k ≠ 0) : ‖q ^ k‖ < 1 := by simpa using pow_lt_one₀ (norm_nonneg q) hq hk
+  simpa [div_eq_mul_inv, bInv_eq_inv_of_isUnit (isUnit_qPochhammer_of_norm_lt_one hq hq _),
+    bInv_eq_inv_of_isUnit (isUnit_qPochhammerInf_of_norm_lt_one hq (h 5 (by norm_num))),
+    bInv_eq_inv_of_isUnit (isUnit_qPochhammerInf_of_norm_lt_one (h 4 (by norm_num))
+      (h 5 (by norm_num)))] using first_rogers_ramanujan_hasSum_of_norm_lt_one hq
+
+/-- **Second Rogers-Ramanujan identity in a complete normed field**, `HasSum` version: for
+`‖q‖ < 1`, `∑ q ^ (j (j + 1)) / (q; q)_j = 1 / ((q ^ 2; q ^ 5)_∞ (q ^ 3; q ^ 5)_∞)`. -/
+theorem second_rogers_ramanujan_hasSum_div_of_norm_lt_one (hq : ‖q‖ < 1) :
+    HasSum (fun j ↦ q ^ (j * (j + 1)) / (q; q)_j) ((q ^ 2; q ^ 5)_∞⁻¹ * (q ^ 3; q ^ 5)_∞⁻¹) := by
+  have h (k : ℕ) (hk : k ≠ 0) : ‖q ^ k‖ < 1 := by simpa using pow_lt_one₀ (norm_nonneg q) hq hk
+  simpa [div_eq_mul_inv, bInv_eq_inv_of_isUnit (isUnit_qPochhammer_of_norm_lt_one hq hq _),
+    bInv_eq_inv_of_isUnit (isUnit_qPochhammerInf_of_norm_lt_one (h 2 (by norm_num))
+      (h 5 (by norm_num))),
+    bInv_eq_inv_of_isUnit (isUnit_qPochhammerInf_of_norm_lt_one (h 3 (by norm_num))
+      (h 5 (by norm_num)))] using second_rogers_ramanujan_hasSum_of_norm_lt_one hq
+
+/-- **First Rogers-Ramanujan identity in a complete normed field** (such as `ℂ`): for `‖q‖ < 1`,
+`∑' j, q ^ (j ^ 2) / (q; q)_j = 1 / ((q; q ^ 5)_∞ (q ^ 4; q ^ 5)_∞)`. -/
+theorem first_rogers_ramanujan_div_of_norm_lt_one (hq : ‖q‖ < 1) :
+    ∑' j, q ^ j ^ 2 / (q; q)_j = (q; q ^ 5)_∞⁻¹ * (q ^ 4; q ^ 5)_∞⁻¹ :=
+  (first_rogers_ramanujan_hasSum_div_of_norm_lt_one hq).tsum_eq
+
+/-- **Second Rogers-Ramanujan identity in a complete normed field** (such as `ℂ`): for `‖q‖ < 1`,
+`∑' j, q ^ (j (j + 1)) / (q; q)_j = 1 / ((q ^ 2; q ^ 5)_∞ (q ^ 3; q ^ 5)_∞)`. -/
+theorem second_rogers_ramanujan_div_of_norm_lt_one (hq : ‖q‖ < 1) :
+    ∑' j, q ^ (j * (j + 1)) / (q; q)_j = (q ^ 2; q ^ 5)_∞⁻¹ * (q ^ 3; q ^ 5)_∞⁻¹ :=
+  (second_rogers_ramanujan_hasSum_div_of_norm_lt_one hq).tsum_eq
+
+end normedField

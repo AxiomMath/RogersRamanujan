@@ -36,6 +36,10 @@ variable [T2Space R]
 @[simp] theorem qPochhammerInf_one : (1; q)_∞ = 0 :=
   tprod_of_exists_eq_zero ⟨0, by simp⟩
 
+@[simp] theorem qPochhammerInf_zero_right : (a; (0 : R))_∞ = 1 - a :=
+  (hasProd_single 0 (f := fun i ↦ 1 - a * (0 : R) ^ i) (fun i hi ↦ by simp [zero_pow hi])
+    (.conditional ℕ)).tprod_eq.trans (by simp)
+
 theorem qPochhammerInf_bInv_pow_eq_zero {m : ℕ} : qPochhammerInf (bInv q ^ m) q = 0 := by
   by_cases hqu : IsUnit q
   · exact tprod_of_exists_eq_zero ⟨m, by simp [← mul_pow, hqu]⟩
