@@ -21,8 +21,8 @@ where the infinite products converge in `𝕜` and the sum over `ℤ` is a genui
   primed versions): the Jacobi triple product in `𝕜`, in the same shape as
   `jacobi_triple_product_hasSum` and `jacobi_triple_product`;
 * `jacobi_triple_product_theta_hasSum`, `jacobi_triple_product_theta`: the classical two-variable
-  form `∏ (1 - q^{i+1})(1 + z q^i)(1 + z⁻¹ q^{i+1}) = ∑ n : ℤ, z ^ n * q ^ jtpDeg n` in a complete
-  normed field, where `jtpDeg n = n(n-1)/2`.
+  form `∏ (1 - q^{i+1})(1 + z q^i)(1 + z⁻¹ q^{i+1}) = ∑ n : ℤ, z ^ n * q ^ (n(n-1)/2)` in a complete
+  normed field.
 
 ## Implementation notes
 
@@ -40,21 +40,6 @@ evaluated at `A ↦ a`, `X ↦ b` with `PowerSeries.evalAt` (see
 open Filter
 open QTheory PowerSeries PowerSeries.DiscreteTopology
 
-/-- The triangular number `n * (n - 1) / 2` (see `two_mul_jtpDeg`): the `X`-degree of the `n`-th
-term of the formal Jacobi triple product. -/
-def jtpDeg : ℤ → ℕ
-  | (k : ℕ) => k.choose 2
-  | Int.negSucc k => (k + 1).choose 2 + (k + 1)
-
-@[simp] theorem jtpDeg_nat (k : ℕ) : jtpDeg k = k.choose 2 := rfl
-
-@[simp] theorem jtpDeg_neg_nat (k : ℕ) : jtpDeg (-k) = k.choose 2 + k := by cases k <;> rfl
-
-/-- `jtpDeg n` is the triangular number `n(n-1)/2`. -/
-theorem two_mul_jtpDeg (n : ℤ) : 2 * (jtpDeg n : ℤ) = n * (n - 1) := by
-  obtain ⟨k, rfl | rfl⟩ := n.eq_nat_or_neg <;>
-    grind [Nat.two_mul_cast_choose_two_right, jtpDeg_nat, jtpDeg_neg_nat]
-
 /-- The theta-type series `∑ s ^ k * t ^ (k choose 2)` converges for `0 ≤ s` and `0 ≤ t < 1`. -/
 theorem summable_pow_mul_pow_choose_two {s t : ℝ} (hs : 0 ≤ s) (ht0 : 0 ≤ t) (ht : t < 1) :
     Summable fun k : ℕ ↦ s ^ k * t ^ k.choose 2 := by
@@ -67,16 +52,28 @@ theorem summable_pow_mul_pow_choose_two {s t : ℝ} (hs : 0 ≤ s) (ht0 : 0 ≤ 
 
 /-! ### The formal Jacobi triple product in `ℤ[A]⟦X⟧` -/
 
+private theorem toNat_mul_sub_one_div_two (n : ℤ) :
+    (n * (n - 1) / 2).toNat = n.natAbs.choose 2 + (-n).toNat := by
+  obtain ⟨k, rfl | rfl⟩ := n.eq_nat_or_neg <;> have := Nat.two_mul_cast_choose_two_right k <;>
+    simp <;> lia
+
+private theorem toNat_mul_add_one_div_two (n : ℤ) :
+    (n * (n + 1) / 2).toNat = n.natAbs.choose 2 + n.toNat := by
+  obtain ⟨k, rfl | rfl⟩ := n.eq_nat_or_neg <;> have := Nat.two_mul_cast_choose_two_right k <;>
+    simp <;> lia
+
 /-- The formal Jacobi triple product in `ℤ[A]⟦X⟧`, for `a = A`, `b = X` and `q = A * X`; its
-`n`-th term is the monomial `(-1) ^ |n| * A ^ jtpDeg (-n) * X ^ jtpDeg n`. -/
+`n`-th term is the monomial `(-1) ^ |n| * A ^ (n(n+1)/2) * X ^ (n(n-1)/2)`. -/
 private theorem hasSum_jacobi_triple_product_polynomial :
-    HasSum (fun n : ℤ ↦ C ((-1) ^ n.natAbs * Polynomial.X ^ jtpDeg (-n)) * X ^ jtpDeg n)
+    HasSum (fun n : ℤ ↦ C ((-1) ^ n.natAbs * Polynomial.X ^ (n * (n + 1) / 2).toNat) *
+      X ^ (n * (n - 1) / 2).toNat)
       ((C Polynomial.X * X; C Polynomial.X * X)_∞ * (C Polynomial.X; C Polynomial.X * X)_∞ *
         (X; C Polynomial.X * X)_∞ : (Polynomial ℤ)⟦X⟧) := by
   refine (jacobi_triple_product_hasSum' (by simp) rfl).congr_fun fun n ↦ ?_
   obtain ⟨k, rfl | rfl⟩ := n.eq_nat_or_neg <;>
-    simp only [abPow_nat, abPow_neg_nat, jtpDeg_nat, jtpDeg_neg_nat, neg_neg, Int.natAbs_neg,
-      Int.natAbs_natCast, map_mul, map_pow, map_neg, map_one] <;> ring
+    simp only [toNat_mul_sub_one_div_two, toNat_mul_add_one_div_two, abPow_nat, abPow_neg_nat,
+      Int.natAbs_neg, Int.natAbs_natCast, Int.toNat_natCast, Int.toNat_neg_natCast, neg_neg,
+      map_mul, map_pow, map_neg, map_one] <;> ring
 
 /-! ### Evaluation at `A ↦ a`, `X ↦ b` -/
 
@@ -88,13 +85,14 @@ variable {𝕜 : Type*} [NormedCommRing 𝕜] (a b : 𝕜)
 analytic one. -/
 private theorem evalAt_jtp_summand (n : ℤ) :
     evalAt (Polynomial.eval₂RingHom (Int.castRingHom 𝕜) a) b
-        (C ((-1) ^ n.natAbs * Polynomial.X ^ jtpDeg (-n)) * X ^ jtpDeg n) =
+        (C ((-1) ^ n.natAbs * Polynomial.X ^ (n * (n + 1) / 2).toNat) *
+      X ^ (n * (n - 1) / 2).toNat) =
       abPow (-a) (-b) n * (a * b) ^ n.natAbs.choose 2 := by
   rw [evalAt_C_mul_X_pow]
   obtain ⟨k, rfl | rfl⟩ := n.eq_nat_or_neg <;>
-    simp only [abPow_nat, abPow_neg_nat, jtpDeg_nat, jtpDeg_neg_nat, neg_neg, Int.natAbs_neg,
-      Int.natAbs_natCast, map_mul, map_pow, map_neg, map_one, Polynomial.coe_eval₂RingHom,
-      Polynomial.eval₂_X] <;> ring
+    simp only [toNat_mul_sub_one_div_two, toNat_mul_add_one_div_two, abPow_nat, abPow_neg_nat,
+      Int.natAbs_neg, Int.natAbs_natCast, Int.toNat_natCast, Int.toNat_neg_natCast, neg_neg,
+      map_mul, map_pow, map_neg, map_one, Polynomial.coe_eval₂RingHom, Polynomial.eval₂_X] <;> ring
 
 variable {a b} [NormOneClass 𝕜]
 
@@ -102,7 +100,8 @@ variable {a b} [NormOneClass 𝕜]
 `X ↦ b` for `‖a * b‖ < 1`. -/
 private theorem tsum_enormAt_jtp_summand_ne_top (hab : ‖a * b‖ < 1) :
     ∑' n : ℤ, enormAt (Polynomial.eval₂RingHom (Int.castRingHom 𝕜) a) b
-      (C ((-1) ^ n.natAbs * Polynomial.X ^ jtpDeg (-n)) * X ^ jtpDeg n) ≠ ⊤ := by
+      (C ((-1) ^ n.natAbs * Polynomial.X ^ (n * (n + 1) / 2).toNat) *
+      X ^ (n * (n - 1) / 2).toNat) ≠ ⊤ := by
   have hs : Summable fun n : ℤ ↦ abPow ‖a‖ ‖b‖ n * ‖a * b‖ ^ n.natAbs.choose 2 :=
     .of_nat_of_neg (by simpa using summable_pow_mul_pow_choose_two (norm_nonneg a) (by simp) hab)
       (by simpa using summable_pow_mul_pow_choose_two (norm_nonneg b) (by simp) hab)
@@ -178,15 +177,19 @@ variable {𝕜 : Type*} [NormedField 𝕜] [CompleteSpace 𝕜] {q z : 𝕜}
 $$\prod_{i \ge 0} (1 - q^{i+1})(1 + z q^i)(1 + z^{-1} q^{i+1}) = \sum_{n \in ℤ} z^n q^{n(n-1)/2}.$$
 -/
 theorem jacobi_triple_product_theta_hasSum (hq : ‖q‖ < 1) (hz : z ≠ 0) :
-    HasSum (fun n : ℤ ↦ z ^ n * q ^ jtpDeg n)
+    HasSum (fun n : ℤ ↦ z ^ n * q ^ (n * (n - 1) / 2))
       ((q; q)_∞ * (-z; q)_∞ * (-(z⁻¹ * q); q)_∞) := by
   refine (jacobi_triple_product_hasSum_of_norm_lt_one hq
     (mul_inv_cancel_left₀ hz q)).congr_fun fun n ↦ ?_
-  obtain ⟨k, rfl | rfl⟩ := n.eq_nat_or_neg <;> simp [mul_pow, ← pow_add, add_comm k, mul_assoc]
+  obtain ⟨k, rfl | rfl⟩ := n.eq_nat_or_neg <;> have := Nat.two_mul_cast_choose_two_right k
+  · have : (k : ℤ) * (k - 1) / 2 = k.choose 2 := by lia
+    rw [this, zpow_natCast]; simp
+  · have : -(k : ℤ) * (-k - 1) / 2 = (k.choose 2 + k : ℕ) := by lia
+    rw [this, zpow_natCast]; simp [mul_pow, ← pow_add, add_comm k, mul_assoc]
 
 /-- The `tsum` version of `jacobi_triple_product_theta_hasSum`. -/
 theorem jacobi_triple_product_theta (hq : ‖q‖ < 1) (hz : z ≠ 0) :
-    (q; q)_∞ * (-z; q)_∞ * (-(z⁻¹ * q); q)_∞ = ∑' n : ℤ, z ^ n * q ^ jtpDeg n :=
+    (q; q)_∞ * (-z; q)_∞ * (-(z⁻¹ * q); q)_∞ = ∑' n : ℤ, z ^ n * q ^ (n * (n - 1) / 2) :=
   (jacobi_triple_product_theta_hasSum hq hz).tsum_eq.symm
 
 end Theta
